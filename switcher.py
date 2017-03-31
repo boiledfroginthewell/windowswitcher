@@ -15,7 +15,7 @@ import sys
 # This name should be different from the other programs. UUID is used to avoid overlapping.
 WINDOW_NAME = "Window Switcher\t\t__5f9781ea926f40f88783c5a743662cf1__"
 
-class switch():
+class Switch():
     """
     A label for a window. 
     The associated window is activated by pressing the key writtin in this label.
@@ -39,11 +39,11 @@ class switch():
         Returns a label for new instance
         """
         # Too many windows
-        if len(switch.LABEL_LETTERS) <= switch._counter: return None
+        if len(Switch.LABEL_LETTERS) <= Switch._counter: return None
 
         # label assignment
-        label = switch.LABEL_LETTERS[switch._counter]
-        switch._counter += 1
+        label = Switch.LABEL_LETTERS[Switch._counter]
+        Switch._counter += 1
         return label
 
     def _create_window(self):
@@ -77,7 +77,7 @@ class switch():
        
     def __init__(self, wnckwindow):
         self.win = wnckwindow
-        self.switch_label = switch.new_label()
+        self.switch_label = Switch.new_label()
         self.switch = self._create_window()
 
     def get_switch_label(self):
@@ -99,25 +99,61 @@ class switch():
         if timeout is None:
             timeout = gtk.gdk.x11_get_server_time(gtk.gdk.get_default_root_window())
         self.win.activate(timeout)
-    
+
+    def __str__(self):
+        return self.get_switch_label() +":"+ self.win.get_name()
+   
+
+class LayoutManager():
+    Y_WEIGHT = 4.0 / 3.0
+    MARGIN_X = 4
+    MARGIN_Y = 0
+
+    @staticmethod
+    def is_overlap(box1, box2):
+        return \
+             abs(box1.x - box2.x) < (box1.wid + box2.wid) / 2 \
+            and abs(box1.y - box2.y) < (box1.hei + box2.hei) / 2 
+
+    @staticmethod
+    def manage_layout(sws):
+        """
+        Changes the postions of switch-popup windows
+        so that they do not overlap each other.
+        """
+        switches = []
+        for key in Switch.LABEL_LETTERS[:len(sws)]:
+            sw = sws[key]
+            if sw.get_switch_label() is None: continue
+
+            sw.x, sw.y, _, _ = sw.get_associated_window().get_geometry()
+            sw.wid, sw.hei = sw.switch.get_size()
+            # move a switch inside of the screen
+            if sw.x < 0: sw.x = 0
+            if sw.y < 0: sw.y = 0
+
+            switches.append(sw)
+
+        switches.sort(lambda lhs, rhs: (lhs.x - rhs.x) or (lhs.y - rhs.y))
+        # move switches to left or right
+        for index, switch in enumerate(switches):
+            for previous in switches[:index]:
+                if LayoutManager.is_overlap(switch, previous):
+                    LayoutManager.is_moved_to_x = True
+                    new_x_candidate = previous.x + previous.wid
+                    new_y_candidate = previous.y + previous.hei
+                    if new_x_candidate - switch.x <= (new_y_candidate - switch.y) * LayoutManager.Y_WEIGHT:
+                        switch.x = new_x_candidate + LayoutManager.MARGIN_X
+                    else:
+                        switch.y = new_y_candidate + LayoutManager.MARGIN_Y
+
+            switch.move(switch.x, switch.y)
 
 
-def manage_layout(sws):
-    """
-    Changes the postions of switch-popup windows
-    so that they do not overlap each other.
-    """
-    topleftoffset = 0 # y-coordinate for maximized windows
-    for key in switch.LABEL_LETTERS[:len(sws)]:
-        sw = sws[key]
-        if sw.get_switch_label() is None: continue
 
-        x, y, wid, hei = sw.get_associated_window().get_geometry()
-        # move a switch inside of the screen
-        if x < 0: x = 0
-        if y < 0: y = 0
 
         # Arrange switches for maximized windows
+        """
         if x < 60 and y < 40:  # switch is located at top left corner
             # Note: If a taskbar is located on the left or top, 
             # x or y for a maximized window is not equal to 0.
@@ -126,6 +162,7 @@ def manage_layout(sws):
         else:
             # not a maximize window
             sw.move(x, y)
+        """
 
 
 # switches for the current desktop
@@ -165,7 +202,7 @@ for x in screen.get_windows():
     # include only windows in the current workspace
     workspace = x.get_workspace()
     if workspace == screen.get_active_workspace() or workspace is None:
-        sw = switch(x)
+        sw = Switch(x)
         switches[sw.get_switch_label()] = sw
 
 # special cases (switch-popup windows are not used)
@@ -198,12 +235,12 @@ elif len(switches) == 2:
 
     if pawin is not None:
         # activate previous
-        switch.activate_wnck_window(pawin)
+        Switch.activate_wnck_window(pawin)
         exit()
 
 
 # arrange positions of switch popups
-manage_layout(switches)
+LayoutManager.manage_layout(switches)
 
 # create the main window to accept a key input.
 # this window is located at outside of the screen
