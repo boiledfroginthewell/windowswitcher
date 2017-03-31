@@ -29,6 +29,8 @@ class Switch():
     # LABEL_LETTERS = "FDGSARET"  # Left hand only (QWERTY layout)
     # LABEL_LETTERS = "FDGSARETJDKLUIO"  # Both hands (QWERTY layout)
 
+    MINIMIZED_WINDOW_COLOR = gtk.gdk.Color("#cccccc")
+
     @staticmethod
     def activate_wnck_window(wnck_win):
         wnck_win.activate(gtk.gdk.x11_get_server_time(gtk.gdk.get_default_root_window()))
@@ -46,6 +48,15 @@ class Switch():
         Switch._counter += 1
         return label
 
+    def _set_window_color(self):
+        #if state == wnck.window.STATE_MINIMIZED:
+        if self.get_associated_window().is_minimized():
+            color = Switch.MINIMIZED_WINDOW_COLOR
+        else:
+            color = gtk.gdk.color_parse("white")
+        self.switch.get_children()[0].modify_bg(gtk.STATE_NORMAL, color)
+
+
     def _create_window(self):
         # create popup window
         win = gtk.Window(gtk.WINDOW_POPUP)
@@ -57,7 +68,7 @@ class Switch():
 
         # create border and set layout
         eb = gtk.EventBox()
-        eb.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse("white"))
+        #eb.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse("white"))
         hbox = gtk.HBox()
         eb.add(hbox)
         win.add(eb)
@@ -72,13 +83,23 @@ class Switch():
         hbox.add(icon)
         hbox.add(label)
 
+        # add event handler
+        def on_click(widget, event):
+            if event.button == 1:
+                self.activate()
+            elif event.button == 3:
+                self.get_associated_window().minimize()
+        eb.connect("button-press-event", on_click)
+        self.get_associated_window().connect("state-changed", lambda m,s,d: self._set_window_color())
+
         win.show_all()
         return win
-       
+
     def __init__(self, wnckwindow):
         self.win = wnckwindow
         self.switch_label = Switch.new_label()
         self.switch = self._create_window()
+        self._set_window_color()
 
     def get_switch_label(self):
         return self.switch_label
@@ -112,8 +133,8 @@ class LayoutManager():
     @staticmethod
     def is_overlap(box1, box2):
         return \
-             abs(box1.x - box2.x) < (box1.wid + box2.wid) / 2 \
-            and abs(box1.y - box2.y) < (box1.hei + box2.hei) / 2 
+             abs(box1.x + box1.wid/2 - box2.x - box2.wid/2) < (box1.wid + box2.wid) / 2 \
+            and abs(box1.y + box1.hei/2 - box2.y - box2.hei/2) < (box1.hei + box2.hei) / 2 
 
     @staticmethod
     def manage_layout(sws):
@@ -134,7 +155,7 @@ class LayoutManager():
 
             switches.append(sw)
 
-        switches.sort(lambda lhs, rhs: (lhs.x - rhs.x) or (lhs.y - rhs.y))
+        switches.sort(lambda lhs, rhs: (lhs.y - rhs.y) or (lhs.x - rhs.x))
         # move switches to left or right
         for index, switch in enumerate(switches):
             for previous in switches[:index]:
@@ -148,21 +169,6 @@ class LayoutManager():
                         switch.y = new_y_candidate + LayoutManager.MARGIN_Y
 
             switch.move(switch.x, switch.y)
-
-
-
-
-        # Arrange switches for maximized windows
-        """
-        if x < 60 and y < 40:  # switch is located at top left corner
-            # Note: If a taskbar is located on the left or top, 
-            # x or y for a maximized window is not equal to 0.
-            sw.move(x, topleftoffset) # vertically arrange switches
-            topleftoffset += sw.get_size()[1]
-        else:
-            # not a maximize window
-            sw.move(x, y)
-        """
 
 
 # switches for the current desktop
